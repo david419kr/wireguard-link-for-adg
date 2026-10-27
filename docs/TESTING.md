@@ -6,6 +6,8 @@ Real-device use has been checked on a Samsung SM-F968N with AdGuard 4.15.0. Inte
 
 Version 1.0.9 was installed as a data-preserving update on an OPPO CPH2671 running Android 16 / ColorOS build CPH2671_16.0.10.600(EX01). The installed APK bytes matched the local signed APK. The disconnected notification's gray shield was checked on screen and confirmed by the tester. This is notification compatibility evidence, not a VPN throughput or long-duration test.
 
+Version 1.0.10 keeps that ColorOS fallback and requests the stateful small icon in both connection states for One UI. Its build and host checks passed; it was installed on the same OPPO and the installed bytes were verified. The One UI connected-state presentation of this adjustment has not yet been checked on a Samsung device.
+
 ## Limits
 
 - The connection indicator represents a running local tunnel engine. It is not a guarantee of a successful peer handshake or a working remote service.

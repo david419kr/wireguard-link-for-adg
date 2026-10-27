@@ -225,8 +225,8 @@ public final class TunnelService extends VpnService {
         if (icon == 0) icon = android.R.drawable.ic_lock_lock;
         boolean enabled = TunnelController.isEnabled();
         Bundle iconPolicy = new Bundle();
-        // One UI otherwise substitutes the launcher icon in the notification header.
-        iconPolicy.putBoolean("android.showSmallIcon", !connected);
+        // One UI must use the stateful small icon instead of the neutral application fallback.
+        iconPolicy.putBoolean("android.showSmallIcon", true);
         PendingIntent control;
         if (enabled) {
             Intent disconnect = new Intent(this, TunnelService.class).setAction(ACTION_DISCONNECT);
