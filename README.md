@@ -6,9 +6,28 @@ It also works as a standalone WireGuard VPN client without AdGuard. Integration 
 
 [한국어](README.ko.md) · [Build from source](docs/BUILD.md) · [Integration](docs/INTEGRATION.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-## Install
-
 Download the signed APK from [Releases](https://github.com/david419kr/wireguard-link-for-adg/releases).
+
+## Screenshots
+
+<table>
+  <tr>
+    <th>Disconnected</th>
+    <th>Connected</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/01_app_disconnected.jpg"><img src="docs/01_app_disconnected.jpg" width="280" alt="App with a selected tunnel, disconnected"></a></td>
+    <td align="center"><a href="docs/02_app_connected.jpg"><img src="docs/02_app_connected.jpg" width="280" alt="App connected with AdG integration"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/03_noti_disconnected.jpg"><img src="docs/03_noti_disconnected.jpg" width="280" alt="Disconnected notification alongside AdGuard"></a></td>
+    <td align="center"><a href="docs/04_noti_connected.jpg"><img src="docs/04_noti_connected.jpg" width="280" alt="Connected notification alongside AdGuard"></a></td>
+  </tr>
+</table>
+
+App and notification views alongside AdGuard. Click an image to view it at full size.
+
+## Install
 
 **If the official AdGuard VPN app is installed, uninstall it before installing this app. The two apps cannot be installed together.**
 

@@ -6,9 +6,28 @@ AdGuard 없이도 독립적인 WireGuard VPN 클라이언트로 사용할 수 �
 
 [English](README.md) · [소스 빌드](docs/BUILD.md) · [연동 규약](docs/INTEGRATION.md)
 
-## 설치
-
 [Releases](https://github.com/david419kr/wireguard-link-for-adg/releases)에서 APK를 받으세요.
+
+## 스크린샷
+
+<table>
+  <tr>
+    <th>연결 해제</th>
+    <th>연결됨</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/01_app_disconnected.jpg"><img src="docs/01_app_disconnected.jpg" width="280" alt="터널을 선택한 연결 해제 상태의 앱 화면"></a></td>
+    <td align="center"><a href="docs/02_app_connected.jpg"><img src="docs/02_app_connected.jpg" width="280" alt="AdG 통합으로 연결된 앱 화면"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/03_noti_disconnected.jpg"><img src="docs/03_noti_disconnected.jpg" width="280" alt="AdGuard와 함께 표시되는 연결 해제 알림"></a></td>
+    <td align="center"><a href="docs/04_noti_connected.jpg"><img src="docs/04_noti_connected.jpg" width="280" alt="AdGuard와 함께 표시되는 연결 알림"></a></td>
+  </tr>
+</table>
+
+AdGuard와 함께 사용하는 앱 화면 및 알림입니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
+
+## 설치
 
 **공식 AdGuard VPN 앱이 설치되어 있다면 먼저 삭제한 뒤 이 앱을 설치하세요. 두 앱은 동시에 설치할 수 없습니다.**
 
