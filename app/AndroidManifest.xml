@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.adguard.vpn" android:versionCode="2100000001" android:versionName="1.0.9">
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <queries><package android:name="com.adguard.android" /></queries>
+    <!-- ColorOS replaces notification small icons with the application icon. Keep that fallback neutral. -->
+    <application android:name="com.adguard.vpn.wireguard.LinkApplication" android:label="@string/app_name" android:icon="@drawable/ic_app_neutral" android:roundIcon="@drawable/ic_app_neutral" android:theme="@style/AppTheme" android:allowBackup="false" android:extractNativeLibs="true" android:supportsRtl="true">
+        <meta-data android:name="com.adguard.integration.version" android:value="3" />
+        <activity android:name="com.adguard.vpn.wireguard.MainActivity" android:icon="@mipmap/ic_launcher" android:exported="true" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+        </activity>
+        <activity-alias android:name="com.adguard.vpn.ui.routing_activity.SplashActivity" android:targetActivity="com.adguard.vpn.wireguard.MainActivity" android:icon="@mipmap/ic_launcher" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity android:name="com.adguard.vpn.ui.ShortcutActivity" android:exported="false" android:taskAffinity="com.adguard.vpn.toggle_protection" android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter><action android:name="com.adguard.android.ACTION_TOGGLE_CONNECTION" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+        </activity>
+        <activity android:name="com.adguard.vpn.wireguard.CameraScanActivity" android:exported="false" />
+        <activity android:name="com.adguard.vpn.wireguard.NotificationConnectActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service android:name="com.adguard.vpn.wireguard.TunnelService" android:exported="false" android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="specialUse">
+            <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-controlled WireGuard VPN tunnel or authenticated local AdGuard integration proxy" />
+        </service>
+        <service android:name="com.adguard.vpn.service.megazord.MegazordService" android:exported="true" />
+        <service android:name="com.adguard.vpn.wireguard.TunnelTileService" android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:icon="@drawable/ic_shield_status" android:label="@string/app_name">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
+        </service>
+    </application>
+</manifest>

@@ -1,0 +1,15 @@
+{
+  "wireguard_android": {
+    "version": "1.0.20260102",
+    "url": "https://repo.maven.apache.org/maven2/com/wireguard/android/tunnel/1.0.20260102/tunnel-1.0.20260102.aar",
+    "sha256": "2b9c16db026496123e4db695d26d03d1958a201096c7c4c89b21077dc70f3119",
+    "license": "Apache-2.0",
+    "scope": "Only config/crypto and NonNullForAll Java classes are packaged"
+  },
+  "zxing_core": {
+    "version": "3.5.4",
+    "url": "https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.4/core-3.5.4.jar",
+    "sha256": "71de5d89341b5fcf5dd89da7f44e84d825d0e084cdf3ec77c9abe26b0f0ceb13",
+    "license": "Apache-2.0"
+  }
+}

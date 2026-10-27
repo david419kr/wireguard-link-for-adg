@@ -1,0 +1,4 @@
+<resources>
+    <string name="shortcut_connection_turn_on">켜기</string>
+    <string name="shortcut_connection_turn_off">끄기</string>
+</resources>
