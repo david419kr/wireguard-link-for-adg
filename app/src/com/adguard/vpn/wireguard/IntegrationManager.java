@@ -31,8 +31,7 @@ public final class IntegrationManager {
     private static SharedPreferences preferences;
     private static IBinder adGuardListener;
     private static IBinder.DeathRecipient listenerDeath;
-    private static volatile boolean adGuardWorking;
-    private static volatile boolean peerStateReceived;
+    private static final PeerState PEER = new PeerState();
     private static Handler STARTUP;
     private static boolean serverBinding, startupPending;
     private static final ServiceConnection SERVER = new ServiceConnection() {
@@ -109,14 +108,14 @@ public final class IntegrationManager {
     }
 
     public static boolean isAdGuardWorking() {
-        return adGuardWorking;
+        return PEER.working();
     }
 
     public static boolean isInstalled() { return installed(); }
 
     /** Missing initial peer data is unknown, not proof that AdGuard protection is off. */
     public static boolean isPeerReady() {
-        return !isEnabled() || !installed() || peerStateReceived;
+        return !isEnabled() || !installed() || PEER.ready();
     }
 
     /** Controller worker only; never call while holding a Binder/UI lock. */
@@ -148,8 +147,8 @@ public final class IntegrationManager {
     public static String status() {
         if (!installed()) return UiText.t(context, "AdG 미설치");
         if (!isEnabled()) return UiText.t(context, "AdG 연동 꺼짐");
-        if (listener() == null) return UiText.t(context, "AdG 연결 대기");
-        return adGuardWorking ? UiText.t(context, "AdG 통합") : UiText.t(context, "AdG 대기 · 단독 VPN");
+        if (!PEER.ready()) return UiText.t(context, "AdG 연결 대기");
+        return PEER.working() ? UiText.t(context, "AdG 통합") : UiText.t(context, "AdG 대기 · 단독 VPN");
     }
 
     public static void notifyStateChanged() {
@@ -170,7 +169,9 @@ public final class IntegrationManager {
             catch (RemoteException gone) { return false; }
             adGuardListener = binder;
             listenerDeath = death;
+            PEER.attach(binder);
         }
+        TunnelController.onIntegrationChanged();
         android.util.Log.i("WireGuardIntegration", "AdG listener registered");
         EVENTS.execute(() -> {
             synchronize((byte) 0);
@@ -185,7 +186,8 @@ public final class IntegrationManager {
             if (!ADGUARD.equals(caller) || binder == null || !binder.equals(adGuardListener)) return false;
             clearListener();
         }
-        updateWorking(false);
+        TunnelController.onIntegrationChanged();
+        ensureConnection();
         return true;
     }
 
@@ -222,21 +224,17 @@ public final class IntegrationManager {
             if (!expected.equals(adGuardListener)) return;
             clearListener();
         }
-        updateWorking(false);
+        TunnelController.onIntegrationChanged();
+        ensureConnection();
     }
 
     private static void clearListener() {
+        PEER.detach(adGuardListener);
         if (adGuardListener != null && listenerDeath != null) {
             try { adGuardListener.unlinkToDeath(listenerDeath, 0); } catch (Exception ignored) {}
         }
         adGuardListener = null;
         listenerDeath = null;
-    }
-
-    private static void updateWorking(boolean working) {
-        boolean changed = adGuardWorking != working;
-        adGuardWorking = working;
-        if (changed) TunnelController.onIntegrationChanged();
     }
 
     private static Bundle localBundle(byte query) {
@@ -249,7 +247,7 @@ public final class IntegrationManager {
             result.putInt("proxy_port", TunnelController.proxyPort());
             result.putString("proxy_username", TunnelController.proxyUsername());
             result.putString("proxy_password", TunnelController.proxyPassword());
-            result.putInt("work_state", workState(isEnabled(), adGuardWorking, TunnelController.isConnected()));
+            result.putInt("work_state", workState(isEnabled(), PEER.working(), TunnelController.isConnected()));
         }
         return result;
     }
@@ -267,8 +265,9 @@ public final class IntegrationManager {
 
     /** No manager monitor is held across a remote callback: AdGuard may synchronously call back. */
     private static Bundle synchronize(byte query) {
-        Bundle remote = requestPeer(query);
-        if (remote.isEmpty()) return remote;
+        IBinder expected = listener();
+        Bundle remote = requestPeer(expected, query);
+        if (remote.isEmpty() || !PEER.current(expected)) return new Bundle();
         Bundle local = localBundle(query);
         if (remote.containsKey("integration_sync_last_time")) {
             long remoteTime = remote.getLong("integration_sync_last_time", 0);
@@ -290,19 +289,20 @@ public final class IntegrationManager {
             int state = workState(isEnabled(), working, TunnelController.isConnected());
             local.putInt("work_state", state);
             remote.putInt("work_state", state);
-            boolean first = !peerStateReceived, unchanged = adGuardWorking == working;
-            peerStateReceived = true;
+            boolean first = !PEER.ready(), unchanged = PEER.working() == working;
+            if (!PEER.update(expected, working)) return new Bundle();
             if (first) android.util.Log.i("WireGuardIntegration", "Initial AdG state received; working=" + working);
             synchronized (READY) { READY.notifyAll(); }
-            updateWorking(working);
-            if (first && unchanged) TunnelController.onIntegrationChanged();
+            if (first || !unchanged) TunnelController.onIntegrationChanged();
         }
         sendPeerBundle(query, local);
         return remote;
     }
 
     private static Bundle requestPeer(byte query) {
-        IBinder peer = listener();
+        return requestPeer(listener(), query);
+    }
+    private static Bundle requestPeer(IBinder peer, byte query) {
         if (peer == null) return new Bundle();
         Parcel request = Parcel.obtain(), reply = Parcel.obtain();
         try {

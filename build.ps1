@@ -53,7 +53,7 @@ if (-not $SkipTests) {
     $tests = Get-ChildItem app/test -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName
     & (Join-Path $javaBin 'javac.exe') -encoding UTF-8 -cp "$classpath;build/classes" -d build/test @tests
     Check 'Test compilation failed'
-    foreach ($test in @('ProfileExportTest','IntegrationStateTest','ConnectionVisualsTest','LegacyShortcutContractTest','UiTextTest','ProfileEditTest')) {
+    foreach ($test in @('ProfileExportTest','IntegrationStateTest','ConnectionVisualsTest','LegacyShortcutContractTest','UiTextTest','ProfileEditTest','RecoveryTest')) {
         & java -cp "build/test;build/classes;$classpath" "com.adguard.vpn.wireguard.$test"
         Check "Test failed: $test"
     }

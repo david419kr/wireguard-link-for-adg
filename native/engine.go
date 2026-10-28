@@ -120,6 +120,24 @@ func getEngine(id uint64) *engine {
 	defer registry.Unlock()
 	return registry.engines[id]
 }
+func rebindEngine(id uint64) bool {
+	e := getEngine(id)
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return !e.closed && e.dev.BindUpdate() == nil
+}
+func updateEngineEndpoints(id uint64, uapi string) bool {
+	e := getEngine(id)
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return !e.closed && e.dev.IpcSet(uapi) == nil
+}
 func stopEngine(id uint64) {
 	registry.Lock()
 	e := registry.engines[id]

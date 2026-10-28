@@ -51,3 +51,10 @@ JNIEXPORT jintArray JNICALL JNI(sockets)(JNIEnv *env,jclass klass,jlong handle) 
     return result;
 }
 JNIEXPORT jboolean JNICALL JNI(networkChanged)(JNIEnv *env,jclass klass,jlong handle) {return wgNetworkChanged(handle)?JNI_TRUE:JNI_FALSE;}
+JNIEXPORT jboolean JNICALL JNI(updateEndpoints)(JNIEnv *env,jclass klass,jlong handle,jstring config) {
+    if(!config) return JNI_FALSE;
+    const char *value=(*env)->GetStringUTFChars(env,config,NULL);
+    jboolean result=value && wgUpdateEndpoints(handle,(char *)value)?JNI_TRUE:JNI_FALSE;
+    if(value)(*env)->ReleaseStringUTFChars(env,config,value);
+    return result;
+}

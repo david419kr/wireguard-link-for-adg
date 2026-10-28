@@ -210,13 +210,25 @@ func (s *socksServer) handle(c net.Conn) {
 		defer remote.Close()
 		reply(c, 0, remote.LocalAddr())
 		done := make(chan struct{})
-		go func() { io.Copy(idleConn{remote}, idleConn{c}); remote.Close(); c.Close(); close(done) }()
-		io.Copy(idleConn{c}, idleConn{remote})
-		remote.Close()
-		c.Close()
+		pump := func(dst, src net.Conn) {
+			_, err := io.Copy(idleConn{dst}, idleConn{src})
+			if err == nil {
+				if writer, ok := dst.(interface{ CloseWrite() error }); ok {
+					err = writer.CloseWrite()
+				} else {
+					err = errors.New("connection does not support half-close")
+				}
+			}
+			if err != nil {
+				remote.Close()
+				c.Close()
+			}
+		}
+		go func() { pump(remote, c); close(done) }()
+		pump(c, remote)
 		<-done
 	case 3:
-		s.udpAssociate(c)
+		s.udpAssociate(c, host, port)
 	default:
 		reply(c, 7, nil)
 	}
@@ -233,7 +245,14 @@ func (c idleConn) Write(b []byte) (int, error) {
 	return c.Conn.Write(b)
 }
 
-func (s *socksServer) udpAssociate(control net.Conn) {
+func (s *socksServer) udpAssociate(control net.Conn, declaredHost string, declaredPort uint16) {
+	peerHost, _, _ := net.SplitHostPort(control.RemoteAddr().String())
+	peer := net.ParseIP(peerHost)
+	declared := net.ParseIP(declaredHost)
+	if declared == nil || (!declared.IsUnspecified() && !declared.Equal(peer)) {
+		reply(control, 2, nil)
+		return
+	}
 	localHost, _, err := net.SplitHostPort(control.LocalAddr().String())
 	if err != nil {
 		return
@@ -249,8 +268,6 @@ func (s *socksServer) udpAssociate(control net.Conn) {
 	defer cancel()
 	go func() { io.Copy(io.Discard, control); cancel(); relay.Close() }()
 	reply(control, 0, relay.LocalAddr())
-	peerHost, _, _ := net.SplitHostPort(control.RemoteAddr().String())
-	peer := net.ParseIP(peerHost)
 	var client *net.UDPAddr
 	var mu sync.Mutex
 	flows := make(map[string]net.Conn)
@@ -271,7 +288,7 @@ func (s *socksServer) udpAssociate(control net.Conn) {
 		if ctx.Err() != nil {
 			return
 		}
-		if !source.IP.Equal(peer) || (client != nil && (source.Port != client.Port || !source.IP.Equal(client.IP))) {
+		if !source.IP.Equal(peer) || (declaredPort != 0 && source.Port != int(declaredPort)) || (client != nil && (source.Port != client.Port || !source.IP.Equal(client.IP))) {
 			continue
 		}
 		if n < 4 || buffer[0] != 0 || buffer[1] != 0 || buffer[2] != 0 {

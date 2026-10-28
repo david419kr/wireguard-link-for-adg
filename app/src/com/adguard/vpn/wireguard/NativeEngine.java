@@ -12,5 +12,6 @@ final class NativeEngine {
     static native String lastError();
     static native int[] sockets(long handle);
     static native boolean networkChanged(long handle);
+    static native boolean updateEndpoints(long handle, String endpointUapi);
     private NativeEngine() {}
 }

@@ -10,10 +10,15 @@ Version 1.0.10 keeps that ColorOS fallback and requests the stateful small icon 
 
 ## Limits
 
+Version 1.0.11 adds capped reconnect backoff, explicit socket-rebind failure handling, and fresh endpoint resolution on network changes. Missing DNS answers no longer silently remove an endpoint. AdGuard state is tied to its current Binder registration; losing that registration pauses integration until fresh state arrives. VPN revocation preserves connection intent only for a possible AdGuard handoff, and otherwise respects the revocation.
+
+Regression checks cover both directions of TCP half-close, explicit UDP sender address/port validation, forced bind failure followed by recovery, endpoint updates without losing peers, DNS failure/re-resolution, and stale peer responses. TCP half-close is always checked through the userspace TCP stack. The real-socket variant skips only on Windows hosts whose direct TCP control also loses the response; Linux CI runs the real-socket case. These are automated checks, not Android Wi-Fi/mobile, battery or long-duration measurements.
+
 - The connection indicator represents a running local tunnel engine. It is not a guarantee of a successful peer handshake or a working remote service.
 - Only one selected tunnel runs at a time.
 - Android allows a single VPN-interface owner; integration and standalone mode coordinate that ownership and may require OS VPN consent.
 - The SOCKS path supports TCP CONNECT and UDP ASSOCIATE; fragmented SOCKS UDP is not supported.
+- UDP associations validate the TCP peer IP and any declared UDP source port. When a client declares port zero, compatibility requires learning the first valid sender port; competing senders on the same loopback IP are not fully authenticated by SOCKS5 in that case.
 - Split routing uses AllowedIPs. Domain routing uses the first DNS result; multi-address/Happy Eyeballs fallback is not implemented.
 - Configured DNS servers must be reachable through the relevant tunnel routes. Network and filtering behavior also depends on the AdGuard configuration.
 - Camera QR, all theme/permission variants, foreground-service behavior across vendors and long-running network transitions are not exhaustively tested.

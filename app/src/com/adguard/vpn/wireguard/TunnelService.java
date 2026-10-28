@@ -37,10 +37,19 @@ public final class TunnelService extends VpnService {
     private volatile long handle;
     private volatile String runningProfile;
     private String runningConfig;
-    private boolean proxy, foreground, destroyed;
+    private boolean proxy, foreground, vpnRevoked;
+    private volatile boolean destroyed;
+    private int retries;
     private ConnectivityManager connectivity;
     private ConnectivityManager.NetworkCallback networks;
     private final Runnable reconcile = this::reconcile;
+    private final Runnable refreshNetwork = this::refreshNetwork;
+    private final Runnable revokeTimeout = () -> {
+        if (!destroyed && RecoveryPolicy.revokeTimedOut(vpnRevoked, TunnelController.integrated())) {
+            TunnelController.setEnabled(this, false);
+            stopTunnel();
+        }
+    };
 
     @Override public void onCreate() {
         super.onCreate();
@@ -74,14 +83,21 @@ public final class TunnelService extends VpnService {
     void reconcileSoon() {
         if (!destroyed && worker != null) { worker.removeCallbacks(reconcile); worker.post(reconcile); }
     }
+    private void retryLater() {
+        if (!destroyed && TunnelController.isEnabled()) {
+            worker.removeCallbacks(reconcile);
+            worker.postDelayed(reconcile, RecoveryPolicy.retryDelay(retries++));
+        }
+    }
 
     private void reconcile() {
         if (destroyed) return;
         if (!TunnelController.isEnabled()) { stopTunnel(); return; }
         try {
             WireGuardProfile profile = TunnelController.selectedProfile();
-            if (profile == null) throw new IllegalStateException("No selected tunnel");
-            if (IntegrationManager.isEnabled() && IntegrationManager.isInstalled() && !IntegrationManager.isPeerReady()) {
+            if (profile == null) { permanentFailure(); return; }
+            if (RecoveryPolicy.waitForPeer(IntegrationManager.isEnabled(), IntegrationManager.isInstalled(), IntegrationManager.isPeerReady())) {
+                closeEngine();
                 IntegrationManager.ensureConnection();
                 TunnelController.update(false, "AdG 연동 상태 확인 중", "AdG 통합");
                 showNotification();
@@ -90,12 +106,20 @@ public final class TunnelService extends VpnService {
                     closeEngine();
                     TunnelController.update(false, "AdG를 열거나 연동을 꺼주세요", "AdG 통합");
                     showNotification();
+                    retryLater();
                     return;
                 }
             }
             boolean wantedProxy = TunnelController.integrated();
+            if (!TunnelController.isEnabled()) { stopTunnel(); return; }
+            if (vpnRevoked && !wantedProxy) {
+                TunnelController.setEnabled(this, false);
+                stopTunnel();
+                return;
+            }
             String mode = wantedProxy ? "AdG 통합" : "WireGuard VPN";
             if (handle != 0 && proxy == wantedProxy && profile.id.equals(runningProfile) && profile.config.equals(runningConfig)) {
+                retries = 0;
                 showNotification(); return;
             }
             closeEngine();
@@ -106,7 +130,13 @@ public final class TunnelService extends VpnService {
                 showNotification();
                 return;
             }
-            Config cfg = profile.parsed();
+            Config cfg;
+            try { cfg = profile.parsed(); }
+            catch (Exception invalid) { permanentFailure(); return; }
+            String uapi = EndpointResolver.userspace(cfg);
+            if (!TunnelController.isEnabled()) { stopTunnel(); return; }
+            if (RecoveryPolicy.waitForPeer(IntegrationManager.isEnabled(), IntegrationManager.isInstalled(), IntegrationManager.isPeerReady())
+                    || wantedProxy != TunnelController.integrated()) { reconcileSoon(); return; }
             List<String> local = new ArrayList<>(), dns = new ArrayList<>(), routes = new ArrayList<>();
             for (InetNetwork address : cfg.getInterface().getAddresses()) local.add(address.getAddress().getHostAddress());
             for (InetAddress server : cfg.getInterface().getDnsServers()) dns.add(server.getHostAddress());
@@ -120,7 +150,7 @@ public final class TunnelService extends VpnService {
                 if (tun == null) throw new IllegalStateException("VPN interface unavailable");
                 fd = tun.detachFd();
             }
-            handle = NativeEngine.start(cfg.toWgUserspaceString(), String.join(",", local), String.join(",", dns), mtu, fd);
+            handle = NativeEngine.start(uapi, String.join(",", local), String.join(",", dns), mtu, fd);
             if (handle == 0) throw new IllegalStateException("Native tunnel unavailable");
             proxy = wantedProxy;
             if (!proxy) protectSockets();
@@ -136,18 +166,28 @@ public final class TunnelService extends VpnService {
             }
             runningProfile = profile.id;
             runningConfig = profile.config;
+            retries = 0;
+            if (proxy) { vpnRevoked = false; worker.removeCallbacks(revokeTimeout); }
             TunnelController.update(true, "연결됨", mode);
             showNotification();
-        } catch (Exception | LinkageError failure) {
+        } catch (LinkageError unavailable) {
+            permanentFailure();
+        } catch (Exception failure) {
             closeEngine();
             // Native/parser errors may contain configuration values; expose no exception text.
             android.util.Log.w("WireGuardTunnel", "Tunnel start failed: " + failure.getClass().getSimpleName());
-            TunnelController.failure("연결하지 못했습니다 · 설정과 네트워크를 확인해 주세요");
+            TunnelController.update(false, "재연결 중", TunnelController.modeKey());
             showNotification();
-            stopForeground(STOP_FOREGROUND_DETACH);
-            foreground = false;
-            stopSelf();
+            retryLater();
         }
+    }
+    private void permanentFailure() {
+        closeEngine();
+        TunnelController.failure("연결하지 못했습니다 · 설정과 네트워크를 확인해 주세요");
+        showNotification();
+        stopForeground(STOP_FOREGROUND_DETACH);
+        foreground = false;
+        stopSelf();
     }
 
     private ParcelFileDescriptor buildTun(WireGuardProfile profile, Config config, int mtu) throws Exception {
@@ -174,16 +214,28 @@ public final class TunnelService extends VpnService {
 
     private void rebindSoon() {
         if (destroyed || worker == null) return;
-        worker.post(() -> {
-            if (handle == 0 || destroyed) return;
-            try {
-                if (NativeEngine.networkChanged(handle) && !proxy) protectSockets();
-            } catch (RuntimeException | LinkageError failure) {
-                closeEngine();
-                TunnelController.update(false, "재연결 중", TunnelController.modeKey());
-                reconcileSoon();
-            }
-        });
+        worker.removeCallbacks(refreshNetwork);
+        worker.postDelayed(refreshNetwork, 250);
+    }
+    private void refreshNetwork() {
+        if (destroyed || !TunnelController.isEnabled()) return;
+        retries = 0;
+        if (handle == 0) { reconcileSoon(); return; }
+        try {
+            if (!NativeEngine.networkChanged(handle)) throw new IllegalStateException("Socket rebind failed");
+            if (!proxy) protectSockets();
+            WireGuardProfile profile = TunnelController.selectedProfile();
+            if (profile == null || !profile.id.equals(runningProfile)) { reconcileSoon(); return; }
+            if (!NativeEngine.updateEndpoints(handle, EndpointResolver.endpoints(profile.parsed())))
+                throw new IllegalStateException("Endpoint update failed");
+        } catch (LinkageError unavailable) {
+            permanentFailure();
+        } catch (Exception failure) {
+            closeEngine();
+            TunnelController.update(false, "재연결 중", TunnelController.modeKey());
+            showNotification();
+            retryLater();
+        }
     }
     private void protectSockets() {
         for (int fd : NativeEngine.sockets(handle)) {
@@ -203,6 +255,9 @@ public final class TunnelService extends VpnService {
         runningProfile = runningConfig = null;
     }
     private void stopTunnel() {
+        worker.removeCallbacks(reconcile);
+        worker.removeCallbacks(refreshNetwork);
+        worker.removeCallbacks(revokeTimeout);
         closeEngine();
         TunnelController.update(false, "연결 해제됨", TunnelController.modeKey());
         // Keep a dismissible reconnect action without keeping the service in the foreground.
@@ -260,7 +315,26 @@ public final class TunnelService extends VpnService {
             manager.notify(NOTIFICATION, updated);
         }
     }
-    @Override public void onRevoke() { TunnelController.setEnabled(this, false); }
+    @Override public void onRevoke() {
+        if (worker == null || destroyed) return;
+        worker.post(() -> {
+            if (!RecoveryPolicy.keepAfterRevoke(IntegrationManager.isEnabled(), IntegrationManager.isInstalled(),
+                    IntegrationManager.isPeerReady(), IntegrationManager.isAdGuardWorking())) {
+                TunnelController.setEnabled(this, false);
+                stopTunnel();
+                return;
+            }
+            vpnRevoked = true;
+            if (proxy && handle != 0) { vpnRevoked = false; return; }
+            worker.removeCallbacks(revokeTimeout);
+            worker.postDelayed(revokeTimeout, 10000);
+            closeEngine();
+            TunnelController.update(false, "AdG 연동 상태 확인 중", "AdG 통합");
+            showNotification();
+            IntegrationManager.ensureConnection();
+            reconcileSoon();
+        });
+    }
     @Override public void onDestroy() {
         destroyed = true;
         if (networks != null) try { connectivity.unregisterNetworkCallback(networks); } catch (RuntimeException ignored) { }

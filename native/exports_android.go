@@ -66,14 +66,16 @@ func safeSocket(e *engine, family int) (fd int) {
 
 //export wgNetworkChanged
 func wgNetworkChanged(id C.ulonglong) C.int {
-	e := getEngine(uint64(id))
-	if e == nil {
-		return 0
+	if rebindEngine(uint64(id)) {
+		return 1
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.closed || e.dev.BindUpdate() != nil {
-		return 0
+	return 0
+}
+
+//export wgUpdateEndpoints
+func wgUpdateEndpoints(id C.ulonglong, uapi *C.char) C.int {
+	if uapi != nil && updateEngineEndpoints(uint64(id), C.GoString(uapi)) {
+		return 1
 	}
-	return 1
+	return 0
 }
